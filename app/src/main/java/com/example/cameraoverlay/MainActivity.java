@@ -3,12 +3,14 @@ package com.example.cameraoverlay;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Outline;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -26,92 +28,170 @@ public class MainActivity extends Activity {
 
     private Uri selectedPhoto;
 
-    private float photoX = 0;
-    private float photoY = 0;
-    private float photoScale = 1.0f;
+    private int photoSize = 500;
+
+    private int photoX = 0;
+    private int photoY = 80;
 
     private float downX;
     private float downY;
-    private float startX;
-    private float startY;
 
-    private int baseSize = 500;
+    private int startX;
+    private int startY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        buildScreen();
+        createScreen();
     }
 
-    private void buildScreen() {
+    private void createScreen() {
 
         LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.WHITE);
 
-        // Top bar
-        LinearLayout top = new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(20, 20, 20, 10);
+        root.setOrientation(
+                LinearLayout.VERTICAL
+        );
 
-        Button back = new Button(this);
+        root.setBackgroundColor(
+                Color.WHITE
+        );
+
+        // -------------------------
+        // TOP BAR
+        // -------------------------
+
+        LinearLayout topBar =
+                new LinearLayout(this);
+
+        topBar.setGravity(
+                Gravity.CENTER_VERTICAL
+        );
+
+        topBar.setPadding(
+                15,
+                15,
+                15,
+                5
+        );
+
+        Button back =
+                new Button(this);
+
         back.setText("←");
+        back.setTextSize(24);
 
-        TextView title = new TextView(this);
-        title.setText("TEST CAMERA");
+        topBar.addView(
+                back,
+                new LinearLayout.LayoutParams(
+                        70,
+                        65
+                )
+        );
+
+        TextView title =
+                new TextView(this);
+
+        title.setText(
+                "TEST CAMERA"
+        );
+
         title.setTextSize(20);
         title.setTextColor(Color.BLACK);
         title.setGravity(Gravity.CENTER);
 
-        top.addView(
-                back,
+        topBar.addView(
+                title,
                 new LinearLayout.LayoutParams(
-                        70,
-                        60
+                        0,
+                        65,
+                        1
                 )
         );
 
-        LinearLayout.LayoutParams titleParams =
-                new LinearLayout.LayoutParams(
-                        0,
-                        60,
-                        1
-                );
+        root.addView(topBar);
 
-        top.addView(title, titleParams);
+        // -------------------------
+        // PREVIEW
+        // -------------------------
 
-        root.addView(top);
+        preview =
+                new FrameLayout(this);
 
-        // Preview area
-        preview = new FrameLayout(this);
-        preview.setBackgroundColor(Color.WHITE);
+        preview.setBackgroundColor(
+                Color.WHITE
+        );
 
-        LinearLayout.LayoutParams previewParams =
+        root.addView(
+                preview,
                 new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         0,
                         1
+                )
+        );
+
+        // -------------------------
+        // PHOTO
+        // -------------------------
+
+        photo =
+                new ImageView(this);
+
+        photo.setScaleType(
+                ImageView.ScaleType.CENTER_CROP
+        );
+
+        photo.setVisibility(
+                View.GONE
+        );
+
+        makePhotoCircular();
+
+        FrameLayout.LayoutParams photoParams =
+                new FrameLayout.LayoutParams(
+                        photoSize,
+                        photoSize
                 );
 
-        root.addView(preview, previewParams);
+        photoParams.gravity =
+                Gravity.TOP |
+                Gravity.CENTER_HORIZONTAL;
 
-        // Face guide
-        faceGuide = new View(this);
+        photoParams.topMargin = 80;
 
-        GradientDrawable guideBackground =
+        preview.addView(
+                photo,
+                photoParams
+        );
+
+        // -------------------------
+        // FACE GUIDE
+        // -------------------------
+
+        faceGuide =
+                new View(this);
+
+        GradientDrawable guide =
                 new GradientDrawable();
 
-        guideBackground.setColor(Color.TRANSPARENT);
-        guideBackground.setShape(
+        guide.setShape(
                 GradientDrawable.OVAL
         );
-        guideBackground.setStroke(
-                6,
+
+        guide.setColor(
+                Color.TRANSPARENT
+        );
+
+        guide.setStroke(
+                5,
                 Color.WHITE
         );
 
-        faceGuide.setBackground(guideBackground);
+        faceGuide.setBackground(
+                guide
+        );
 
         FrameLayout.LayoutParams guideParams =
                 new FrameLayout.LayoutParams(
@@ -119,8 +199,9 @@ public class MainActivity extends Activity {
                         500
                 );
 
-        guideParams.gravity = Gravity.TOP
-                | Gravity.CENTER_HORIZONTAL;
+        guideParams.gravity =
+                Gravity.TOP |
+                Gravity.CENTER_HORIZONTAL;
 
         guideParams.topMargin = 80;
 
@@ -129,36 +210,12 @@ public class MainActivity extends Activity {
                 guideParams
         );
 
-        // Photo
-        photo = new ImageView(this);
-
-        photo.setScaleType(
-                ImageView.ScaleType.CENTER_CROP
-        );
-
-        photo.setVisibility(View.GONE);
-
-        FrameLayout.LayoutParams photoParams =
-                new FrameLayout.LayoutParams(
-                        baseSize,
-                        baseSize
-                );
-
-        photoParams.gravity =
-                Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-
-        photoParams.topMargin = 80;
-
-        preview.addView(
-                photo,
-                0,
-                photoParams
-        );
-
-        // Put guide above photo
         faceGuide.bringToFront();
 
-        // Drag photo
+        // -------------------------
+        // DRAG PHOTO
+        // -------------------------
+
         photo.setOnTouchListener(
                 new View.OnTouchListener() {
 
@@ -175,11 +232,17 @@ public class MainActivity extends Activity {
                         if (event.getAction() ==
                                 MotionEvent.ACTION_DOWN) {
 
-                            downX = event.getRawX();
-                            downY = event.getRawY();
+                            downX =
+                                    event.getRawX();
 
-                            startX = lp.leftMargin;
-                            startY = lp.topMargin;
+                            downY =
+                                    event.getRawY();
+
+                            startX =
+                                    lp.leftMargin;
+
+                            startY =
+                                    lp.topMargin;
 
                             return true;
                         }
@@ -188,26 +251,34 @@ public class MainActivity extends Activity {
                                 MotionEvent.ACTION_MOVE) {
 
                             int newX =
+                                    startX +
                                     (int) (
-                                            startX +
-                                            event.getRawX() -
-                                            downX
+                                            event.getRawX()
+                                                    - downX
                                     );
 
                             int newY =
+                                    startY +
                                     (int) (
-                                            startY +
-                                            event.getRawY() -
-                                            downY
+                                            event.getRawY()
+                                                    - downY
                                     );
 
-                            lp.leftMargin = newX;
-                            lp.topMargin = newY;
+                            lp.leftMargin =
+                                    newX;
 
-                            photoX = newX;
-                            photoY = newY;
+                            lp.topMargin =
+                                    newY;
 
-                            photo.setLayoutParams(lp);
+                            photoX =
+                                    newX;
+
+                            photoY =
+                                    newY;
+
+                            photo.setLayoutParams(
+                                    lp
+                            );
 
                             return true;
                         }
@@ -217,44 +288,67 @@ public class MainActivity extends Activity {
                 }
         );
 
-        // Instruction
-        TextView instruction = new TextView(this);
+        // -------------------------
+        // MESSAGE
+        // -------------------------
 
-        instruction.setText(
-                "Fit the test photo inside the guide"
+        TextView message =
+                new TextView(this);
+
+        message.setText(
+                "Fit your test photo in the guide"
         );
 
-        instruction.setTextSize(16);
-        instruction.setTextColor(Color.WHITE);
-        instruction.setGravity(Gravity.CENTER);
+        message.setTextSize(16);
+        message.setTextColor(Color.WHITE);
+        message.setGravity(
+                Gravity.CENTER
+        );
 
-        GradientDrawable blackBox =
+        GradientDrawable messageBg =
                 new GradientDrawable();
 
-        blackBox.setColor(Color.BLACK);
-        blackBox.setCornerRadius(60);
+        messageBg.setColor(
+                Color.BLACK
+        );
 
-        instruction.setBackground(blackBox);
-        instruction.setPadding(35, 18, 35, 18);
+        messageBg.setCornerRadius(
+                60
+        );
 
-        FrameLayout.LayoutParams textParams =
+        message.setBackground(
+                messageBg
+        );
+
+        message.setPadding(
+                35,
+                18,
+                35,
+                18
+        );
+
+        FrameLayout.LayoutParams messageParams =
                 new FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.WRAP_CONTENT,
                         FrameLayout.LayoutParams.WRAP_CONTENT
                 );
 
-        textParams.gravity =
-                Gravity.CENTER_HORIZONTAL
-                | Gravity.BOTTOM;
+        messageParams.gravity =
+                Gravity.CENTER_HORIZONTAL |
+                Gravity.BOTTOM;
 
-        textParams.bottomMargin = 150;
+        messageParams.bottomMargin =
+                120;
 
         preview.addView(
-                instruction,
-                textParams
+                message,
+                messageParams
         );
 
-        // Bottom controls
+        // -------------------------
+        // CONTROLS
+        // -------------------------
+
         LinearLayout controls =
                 new LinearLayout(this);
 
@@ -267,21 +361,26 @@ public class MainActivity extends Activity {
         );
 
         controls.setPadding(
-                10,
-                10,
-                10,
-                20
+                5,
+                5,
+                5,
+                15
         );
 
-        Button select = makeButton("PHOTO");
+        Button select =
+                makeButton("PHOTO");
 
-        Button minus = makeButton("−");
+        Button minus =
+                makeButton("−");
 
-        Button plus = makeButton("+");
+        Button plus =
+                makeButton("+");
 
-        Button reset = makeButton("RESET");
+        Button reset =
+                makeButton("RESET");
 
-        Button capture = makeButton("TEST CAPTURE");
+        Button capture =
+                makeButton("TEST CAPTURE");
 
         controls.addView(select);
         controls.addView(minus);
@@ -299,65 +398,85 @@ public class MainActivity extends Activity {
 
         setContentView(root);
 
-        // Select photo
-        select.setOnClickListener(
-                v -> openPicker()
-        );
-
-        // Resize down
-        minus.setOnClickListener(
-                v -> resizePhoto(-50)
-        );
-
-        // Resize up
-        plus.setOnClickListener(
-                v -> resizePhoto(50)
-        );
-
-        // Reset
-        reset.setOnClickListener(
-                v -> resetPhoto()
-        );
-
-        // Test capture
-        capture.setOnClickListener(
-                v -> {
-
-                    if (selectedPhoto == null) {
-
-                        Toast.makeText(
-                                this,
-                                "Select a test photo first",
-                                Toast.LENGTH_SHORT
-                        ).show();
-
-                        return;
-                    }
-
-                    Toast.makeText(
-                            this,
-                            "TEST CAPTURE OK",
-                            Toast.LENGTH_SHORT
-                    ).show();
-                }
-        );
+        // -------------------------
+        // BUTTONS
+        // -------------------------
 
         back.setOnClickListener(
                 v -> finish()
         );
+
+        select.setOnClickListener(
+                v -> openPhotoPicker()
+        );
+
+        minus.setOnClickListener(
+                v -> resizePhoto(-40)
+        );
+
+        plus.setOnClickListener(
+                v -> resizePhoto(40)
+        );
+
+        reset.setOnClickListener(
+                v -> resetPhoto()
+        );
+
+        capture.setOnClickListener(
+                v -> testCapture()
+        );
     }
 
-    private Button makeButton(String text) {
+    // -------------------------
+    // MAKE PHOTO CIRCULAR
+    // -------------------------
 
-        Button b = new Button(this);
+    private void makePhotoCircular() {
 
-        b.setText(text);
-        b.setTextSize(13);
+        GradientDrawable circle =
+                new GradientDrawable();
 
-        return b;
+        circle.setShape(
+                GradientDrawable.OVAL
+        );
+
+        circle.setColor(
+                Color.TRANSPARENT
+        );
+
+        photo.setBackground(
+                circle
+        );
+
+        photo.setClipToOutline(
+                true
+        );
+
+        photo.setOutlineProvider(
+                new ViewOutlineProvider() {
+
+                    @Override
+                    public void getOutline(
+                            View view,
+                            Outline outline
+                    ) {
+
+                        outline.setOval(
+                                0,
+                                0,
+                                view.getWidth(),
+                                view.getHeight()
+                        );
+                    }
+                }
+        );
     }
 
-    private void openPicker() {
+    // -------------------------
+    // PHOTO PICKER
+    // -------------------------
+
+    private void openPhotoPicker() {
 
         Intent intent =
                 new Intent(
@@ -368,7 +487,17 @@ public class MainActivity extends Activity {
                 Intent.CATEGORY_OPENABLE
         );
 
-        intent.setType("image/*");
+        intent.setType(
+                "image/*"
+        );
+
+        intent.addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+        );
+
+        intent.addFlags(
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        );
 
         startActivityForResult(
                 intent,
@@ -394,7 +523,19 @@ public class MainActivity extends Activity {
                 && data != null
                 && data.getData() != null) {
 
-            selectedPhoto = data.getData();
+            selectedPhoto =
+                    data.getData();
+
+            try {
+
+                getContentResolver()
+                        .takePersistableUriPermission(
+                                selectedPhoto,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        );
+
+            } catch (Exception ignored) {
+            }
 
             photo.setImageURI(
                     selectedPhoto
@@ -408,51 +549,136 @@ public class MainActivity extends Activity {
 
             Toast.makeText(
                     this,
-                    "Test photo loaded",
+                    "Photo loaded",
                     Toast.LENGTH_SHORT
             ).show();
         }
     }
 
-    private void resizePhoto(int amount) {
+    // -------------------------
+    // RESIZE
+    // -------------------------
+
+    private void resizePhoto(
+            int amount
+    ) {
+
+        if (selectedPhoto == null) {
+
+            Toast.makeText(
+                    this,
+                    "First select a photo",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        photoSize += amount;
+
+        if (photoSize < 200) {
+            photoSize = 200;
+        }
+
+        if (photoSize > 900) {
+            photoSize = 900;
+        }
 
         FrameLayout.LayoutParams lp =
                 (FrameLayout.LayoutParams)
                         photo.getLayoutParams();
 
-        int newSize =
-                lp.width + amount;
+        lp.width =
+                photoSize;
 
-        if (newSize < 200) {
-            newSize = 200;
-        }
+        lp.height =
+                photoSize;
 
-        if (newSize > 900) {
-            newSize = 900;
-        }
+        photo.setLayoutParams(
+                lp
+        );
 
-        lp.width = newSize;
-        lp.height = newSize;
-
-        photo.setLayoutParams(lp);
+        photo.bringToFront();
+        faceGuide.bringToFront();
     }
+
+    // -------------------------
+    // RESET
+    // -------------------------
 
     private void resetPhoto() {
 
+        photoSize = 500;
+
+        photoX = 0;
+        photoY = 80;
+
         FrameLayout.LayoutParams lp =
                 (FrameLayout.LayoutParams)
                         photo.getLayoutParams();
 
-        lp.width = baseSize;
-        lp.height = baseSize;
+        lp.width =
+                photoSize;
 
-        lp.leftMargin = 0;
-        lp.topMargin = 80;
+        lp.height =
+                photoSize;
 
         lp.gravity =
-                Gravity.TOP
-                | Gravity.CENTER_HORIZONTAL;
+                Gravity.TOP |
+                Gravity.CENTER_HORIZONTAL;
 
-        photo.setLayoutParams(lp);
+        lp.leftMargin =
+                0;
+
+        lp.topMargin =
+                80;
+
+        photo.setLayoutParams(
+                lp
+        );
+
+        photo.bringToFront();
+        faceGuide.bringToFront();
+    }
+
+    // -------------------------
+    // TEST CAPTURE
+    // -------------------------
+
+    private void testCapture() {
+
+        if (selectedPhoto == null) {
+
+            Toast.makeText(
+                    this,
+                    "Select a test photo first",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            return;
+        }
+
+        Toast.makeText(
+                this,
+                "TEST CAPTURE OK",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    // -------------------------
+    // BUTTON
+    // -------------------------
+
+    private Button makeButton(
+            String text
+    ) {
+
+        Button button =
+                new Button(this);
+
+        button.setText(text);
+        button.setTextSize(13);
+
+        return button;
     }
 }
