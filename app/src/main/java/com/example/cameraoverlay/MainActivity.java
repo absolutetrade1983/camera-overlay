@@ -44,7 +44,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         showMainScreen();
     }
 
@@ -55,38 +54,81 @@ public class MainActivity extends Activity {
     private void showMainScreen() {
 
         LinearLayout root = new LinearLayout(this);
+
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setPadding(35, 35, 35, 35);
+        root.setPadding(30, 30, 30, 30);
+        root.setBackgroundColor(Color.rgb(25, 25, 25));
 
         TextView title = new TextView(this);
+
         title.setText("CAMERA OVERLAY");
         title.setTextSize(22);
         title.setTextColor(Color.WHITE);
         title.setGravity(Gravity.CENTER);
         title.setPadding(20, 20, 20, 30);
 
-        root.setBackgroundColor(Color.rgb(25, 25, 25));
-
         root.addView(title);
 
+        // -----------------------------------------------------
+        // SELECT PHOTO
+        // -----------------------------------------------------
+
         Button selectButton = new Button(this);
+
         selectButton.setText("SELECT PHOTO");
 
         selectButton.setOnClickListener(
                 v -> selectPhoto()
         );
 
-        root.addView(selectButton);
+        root.addView(
+                selectButton,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+        );
+
+        // -----------------------------------------------------
+        // START OVERLAY
+        // -----------------------------------------------------
 
         Button startButton = new Button(this);
+
         startButton.setText("START OVERLAY");
 
         startButton.setOnClickListener(
-                v -> startOverlay()
+                v -> startOverlay(false)
         );
 
-        root.addView(startButton);
+        root.addView(
+                startButton,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+        );
+
+        // -----------------------------------------------------
+        // START BACKWARD
+        // -----------------------------------------------------
+
+        Button backwardButton = new Button(this);
+
+        backwardButton.setText("START BACKWARD");
+
+        backwardButton.setOnClickListener(
+                v -> startOverlay(true)
+        );
+
+        root.addView(
+                backwardButton,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+        );
 
         setContentView(root);
     }
@@ -97,11 +139,19 @@ public class MainActivity extends Activity {
 
     private void selectPhoto() {
 
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.setType("image/*");
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        Intent intent =
+                new Intent(Intent.ACTION_OPEN_DOCUMENT);
 
-        startActivityForResult(intent, PICK_IMAGE);
+        intent.setType("image/*");
+
+        intent.addCategory(
+                Intent.CATEGORY_OPENABLE
+        );
+
+        startActivityForResult(
+                intent,
+                PICK_IMAGE
+        );
     }
 
     @Override
@@ -123,10 +173,13 @@ public class MainActivity extends Activity {
             selectedImage = data.getData();
 
             try {
-                getContentResolver().takePersistableUriPermission(
-                        selectedImage,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                );
+
+                getContentResolver()
+                        .takePersistableUriPermission(
+                                selectedImage,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        );
+
             } catch (Exception ignored) {
             }
 
@@ -139,10 +192,12 @@ public class MainActivity extends Activity {
     }
 
     // =========================================================
-    // START OVERLAY
+    // START OVERLAY / BACKWARD
     // =========================================================
 
-    private void startOverlay() {
+    private void startOverlay(
+            boolean backwardMode
+    ) {
 
         if (selectedImage == null) {
 
@@ -157,10 +212,14 @@ public class MainActivity extends Activity {
 
         if (!Settings.canDrawOverlays(this)) {
 
-            Intent intent = new Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())
-            );
+            Intent intent =
+                    new Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse(
+                                    "package:" +
+                                            getPackageName()
+                            )
+                    );
 
             startActivity(intent);
 
@@ -179,18 +238,31 @@ public class MainActivity extends Activity {
         }
 
         windowManager =
-                (WindowManager) getSystemService(
-                        WINDOW_SERVICE
-                );
+                (WindowManager)
+                        getSystemService(
+                                WINDOW_SERVICE
+                        );
 
         createImageOverlay();
+
         createControlOverlay();
 
-        Toast.makeText(
-                this,
-                "Overlay started",
-                Toast.LENGTH_SHORT
-        ).show();
+        if (backwardMode) {
+
+            Toast.makeText(
+                    this,
+                    "START BACKWARD mode started",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+        } else {
+
+            Toast.makeText(
+                    this,
+                    "START OVERLAY mode started",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
     }
 
     // =========================================================
@@ -199,9 +271,12 @@ public class MainActivity extends Activity {
 
     private void createImageOverlay() {
 
-        overlayImage = new ImageView(this);
+        overlayImage =
+                new ImageView(this);
 
-        overlayImage.setImageURI(selectedImage);
+        overlayImage.setImageURI(
+                selectedImage
+        );
 
         overlayImage.setScaleType(
                 ImageView.ScaleType.FIT_CENTER
@@ -226,7 +301,10 @@ public class MainActivity extends Activity {
         imageParams.x = imageX;
         imageParams.y = imageY;
 
-        // Drag photo directly
+        // -----------------------------------------------------
+        // DRAG PHOTO
+        // -----------------------------------------------------
+
         overlayImage.setOnTouchListener(
                 new View.OnTouchListener() {
 
@@ -244,11 +322,17 @@ public class MainActivity extends Activity {
                         if (event.getAction() ==
                                 MotionEvent.ACTION_DOWN) {
 
-                            downX = event.getRawX();
-                            downY = event.getRawY();
+                            downX =
+                                    event.getRawX();
 
-                            startX = imageParams.x;
-                            startY = imageParams.y;
+                            downY =
+                                    event.getRawY();
+
+                            startX =
+                                    imageParams.x;
+
+                            startY =
+                                    imageParams.y;
 
                             return true;
                         }
@@ -258,20 +342,21 @@ public class MainActivity extends Activity {
 
                             imageParams.x =
                                     startX +
-                                            (int) (
-                                                    event.getRawX()
-                                                            - downX
-                                            );
+                                            (int)
+                                                    (event.getRawX()
+                                                            - downX);
 
                             imageParams.y =
                                     startY +
-                                            (int) (
-                                                    event.getRawY()
-                                                            - downY
-                                            );
+                                            (int)
+                                                    (event.getRawY()
+                                                            - downY);
 
-                            imageX = imageParams.x;
-                            imageY = imageParams.y;
+                            imageX =
+                                    imageParams.x;
+
+                            imageY =
+                                    imageParams.y;
 
                             updateImage();
 
@@ -295,7 +380,8 @@ public class MainActivity extends Activity {
 
     private void createControlOverlay() {
 
-        controls = new LinearLayout(this);
+        controls =
+                new LinearLayout(this);
 
         controls.setOrientation(
                 LinearLayout.VERTICAL
@@ -321,11 +407,12 @@ public class MainActivity extends Activity {
                 )
         );
 
-        // =====================================================
+        // -----------------------------------------------------
         // DRAG HANDLE
-        // =====================================================
+        // -----------------------------------------------------
 
-        dragHandle = new TextView(this);
+        dragHandle =
+                new TextView(this);
 
         dragHandle.setText(
                 "☰ DRAG CONTROL BOX"
@@ -352,9 +439,9 @@ public class MainActivity extends Activity {
                 dragHandle
         );
 
-        // =====================================================
+        // -----------------------------------------------------
         // BUTTON ROW
-        // =====================================================
+        // -----------------------------------------------------
 
         LinearLayout row =
                 new LinearLayout(this);
@@ -388,9 +475,6 @@ public class MainActivity extends Activity {
         Button reset =
                 makeOverlayButton("RESET");
 
-        Button backward =
-                makeOverlayButton("BACKWARD");
-
         Button close =
                 makeOverlayButton("X");
 
@@ -401,14 +485,13 @@ public class MainActivity extends Activity {
         row.addView(down);
         row.addView(right);
         row.addView(reset);
-        row.addView(backward);
         row.addView(close);
 
         controls.addView(row);
 
-        // =====================================================
-        // BUTTON ACTIONS
-        // =====================================================
+        // -----------------------------------------------------
+        // ACTIONS
+        // -----------------------------------------------------
 
         left.setOnClickListener(
                 v -> moveImage(
@@ -454,21 +537,13 @@ public class MainActivity extends Activity {
                 v -> resetImage()
         );
 
-        // =====================================================
-        // BACKWARD
-        // =====================================================
-
-        backward.setOnClickListener(
-                v -> sendPhotoBackward()
-        );
-
         close.setOnClickListener(
                 v -> removeOverlay()
         );
 
-        // =====================================================
+        // -----------------------------------------------------
         // CONTROL WINDOW
-        // =====================================================
+        // -----------------------------------------------------
 
         controlParams =
                 new WindowManager.LayoutParams(
@@ -482,16 +557,17 @@ public class MainActivity extends Activity {
         controlParams.gravity =
                 Gravity.TOP | Gravity.START;
 
-        controlParams.x = imageX;
+        controlParams.x =
+                imageX;
 
         controlParams.y =
                 imageY +
                         imageSize +
                         20;
 
-        // =====================================================
+        // -----------------------------------------------------
         // DRAG CONTROL BOX
-        // =====================================================
+        // -----------------------------------------------------
 
         dragHandle.setOnTouchListener(
                 new View.OnTouchListener() {
@@ -510,11 +586,17 @@ public class MainActivity extends Activity {
                         if (event.getAction() ==
                                 MotionEvent.ACTION_DOWN) {
 
-                            downX = event.getRawX();
-                            downY = event.getRawY();
+                            downX =
+                                    event.getRawX();
 
-                            startX = controlParams.x;
-                            startY = controlParams.y;
+                            downY =
+                                    event.getRawY();
+
+                            startX =
+                                    controlParams.x;
+
+                            startY =
+                                    controlParams.y;
 
                             return true;
                         }
@@ -524,17 +606,15 @@ public class MainActivity extends Activity {
 
                             controlParams.x =
                                     startX +
-                                            (int) (
-                                                    event.getRawX()
-                                                            - downX
-                                            );
+                                            (int)
+                                                    (event.getRawX()
+                                                            - downX);
 
                             controlParams.y =
                                     startY +
-                                            (int) (
-                                                    event.getRawY()
-                                                            - downY
-                                            );
+                                            (int)
+                                                    (event.getRawY()
+                                                            - downY);
 
                             try {
 
@@ -561,7 +641,7 @@ public class MainActivity extends Activity {
     }
 
     // =========================================================
-    // BUTTON CREATOR
+    // BUTTON
     // =========================================================
 
     private Button makeOverlayButton(
@@ -581,60 +661,7 @@ public class MainActivity extends Activity {
     }
 
     // =========================================================
-    // BACKWARD
-    // =========================================================
-
-    private void sendPhotoBackward() {
-
-        if (windowManager == null ||
-                overlayImage == null) {
-            return;
-        }
-
-        /*
-         * Android में TYPE_APPLICATION_OVERLAY
-         * दूसरी application के नीचे नहीं जा सकता।
-         *
-         * इसलिए यहाँ photo को हमारे control window
-         * के पीछे रखा जाता है।
-         */
-
-        try {
-
-            windowManager.removeView(
-                    overlayImage
-            );
-
-            windowManager.addView(
-                    overlayImage,
-                    imageParams
-            );
-
-            // Control window को फिर से ऊपर रखो
-            if (controls != null) {
-
-                windowManager.removeView(
-                        controls
-                );
-
-                windowManager.addView(
-                        controls,
-                        controlParams
-                );
-            }
-
-            Toast.makeText(
-                    this,
-                    "Photo sent backward",
-                    Toast.LENGTH_SHORT
-            ).show();
-
-        } catch (Exception ignored) {
-        }
-    }
-
-    // =========================================================
-    // MOVE PHOTO
+    // MOVE
     // =========================================================
 
     private void moveImage(
@@ -650,14 +677,17 @@ public class MainActivity extends Activity {
         imageX += dx;
         imageY += dy;
 
-        imageParams.x = imageX;
-        imageParams.y = imageY;
+        imageParams.x =
+                imageX;
+
+        imageParams.y =
+                imageY;
 
         updateImage();
     }
 
     // =========================================================
-    // RESIZE PHOTO
+    // RESIZE
     // =========================================================
 
     private void resizeImage(
@@ -679,14 +709,17 @@ public class MainActivity extends Activity {
             imageSize = MAX_SIZE;
         }
 
-        imageParams.width = imageSize;
-        imageParams.height = imageSize;
+        imageParams.width =
+                imageSize;
+
+        imageParams.height =
+                imageSize;
 
         updateImage();
     }
 
     // =========================================================
-    // UPDATE PHOTO
+    // UPDATE
     // =========================================================
 
     private void updateImage() {
@@ -715,9 +748,7 @@ public class MainActivity extends Activity {
     private void resetImage() {
 
         imageSize = 500;
-
         imageX = 0;
-
         imageY = 150;
 
         if (imageParams != null) {
@@ -739,7 +770,7 @@ public class MainActivity extends Activity {
     }
 
     // =========================================================
-    // REMOVE OVERLAY
+    // REMOVE
     // =========================================================
 
     private void removeOverlay() {
