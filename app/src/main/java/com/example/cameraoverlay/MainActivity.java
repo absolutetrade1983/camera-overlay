@@ -3,15 +3,14 @@ package com.example.cameraoverlay;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -21,115 +20,360 @@ public class MainActivity extends Activity {
 
     private static final int PICK_IMAGE = 1001;
 
-    private WindowManager windowManager;
+    private FrameLayout preview;
+    private ImageView photo;
+    private View faceGuide;
 
-    private ImageView overlayImage;
-    private LinearLayout controls;
+    private Uri selectedPhoto;
 
-    private WindowManager.LayoutParams imageParams;
-    private WindowManager.LayoutParams controlParams;
+    private float photoX = 0;
+    private float photoY = 0;
+    private float photoScale = 1.0f;
 
-    private Uri selectedImageUri;
+    private float downX;
+    private float downY;
+    private float startX;
+    private float startY;
 
-    private int imageSize = 500;
-    private int imageX = 0;
-    private int imageY = 150;
-
-    private static final int SIZE_STEP = 30;
-    private static final int MOVE_STEP = 40;
-    private static final int MIN_SIZE = 150;
-    private static final int MAX_SIZE = 1500;
+    private int baseSize = 500;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (!Settings.canDrawOverlays(this)) {
-            Intent intent = new Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())
-            );
-            startActivity(intent);
-        }
-
-        showMainScreen();
+        buildScreen();
     }
 
-    private void showMainScreen() {
+    private void buildScreen() {
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setGravity(Gravity.CENTER);
-        layout.setPadding(40, 40, 40, 40);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.WHITE);
+
+        // Top bar
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setPadding(20, 20, 20, 10);
+
+        Button back = new Button(this);
+        back.setText("←");
 
         TextView title = new TextView(this);
-        title.setText("CAMERA OVERLAY");
-        title.setTextSize(24);
+        title.setText("TEST CAMERA");
+        title.setTextSize(20);
         title.setTextColor(Color.BLACK);
         title.setGravity(Gravity.CENTER);
 
-        layout.addView(title);
+        top.addView(
+                back,
+                new LinearLayout.LayoutParams(
+                        70,
+                        60
+                )
+        );
 
-        Button select = new Button(this);
-        select.setText("SELECT PHOTO");
-        layout.addView(select);
-
-        Button start = new Button(this);
-        start.setText("START OVERLAY");
-        layout.addView(start);
-
-        Button stop = new Button(this);
-        stop.setText("STOP OVERLAY");
-        layout.addView(stop);
-
-        select.setOnClickListener(v -> openPicker());
-
-        start.setOnClickListener(v -> {
-
-            if (!Settings.canDrawOverlays(this)) {
-                Toast.makeText(
-                        this,
-                        "Allow Display over other apps first",
-                        Toast.LENGTH_LONG
-                ).show();
-
-                Intent intent = new Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName())
+        LinearLayout.LayoutParams titleParams =
+                new LinearLayout.LayoutParams(
+                        0,
+                        60,
+                        1
                 );
 
-                startActivity(intent);
-                return;
-            }
+        top.addView(title, titleParams);
 
-            if (selectedImageUri == null) {
-                Toast.makeText(
-                        this,
-                        "First select a photo",
-                        Toast.LENGTH_SHORT
-                ).show();
-                return;
-            }
+        root.addView(top);
 
-            createOverlay();
-        });
+        // Preview area
+        preview = new FrameLayout(this);
+        preview.setBackgroundColor(Color.WHITE);
 
-        stop.setOnClickListener(v -> removeOverlay());
+        LinearLayout.LayoutParams previewParams =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        0,
+                        1
+                );
 
-        setContentView(layout);
+        root.addView(preview, previewParams);
+
+        // Face guide
+        faceGuide = new View(this);
+
+        GradientDrawable guideBackground =
+                new GradientDrawable();
+
+        guideBackground.setColor(Color.TRANSPARENT);
+        guideBackground.setShape(
+                GradientDrawable.OVAL
+        );
+        guideBackground.setStroke(
+                6,
+                Color.WHITE
+        );
+
+        faceGuide.setBackground(guideBackground);
+
+        FrameLayout.LayoutParams guideParams =
+                new FrameLayout.LayoutParams(
+                        500,
+                        500
+                );
+
+        guideParams.gravity = Gravity.TOP
+                | Gravity.CENTER_HORIZONTAL;
+
+        guideParams.topMargin = 80;
+
+        preview.addView(
+                faceGuide,
+                guideParams
+        );
+
+        // Photo
+        photo = new ImageView(this);
+
+        photo.setScaleType(
+                ImageView.ScaleType.CENTER_CROP
+        );
+
+        photo.setVisibility(View.GONE);
+
+        FrameLayout.LayoutParams photoParams =
+                new FrameLayout.LayoutParams(
+                        baseSize,
+                        baseSize
+                );
+
+        photoParams.gravity =
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+
+        photoParams.topMargin = 80;
+
+        preview.addView(
+                photo,
+                0,
+                photoParams
+        );
+
+        // Put guide above photo
+        faceGuide.bringToFront();
+
+        // Drag photo
+        photo.setOnTouchListener(
+                new View.OnTouchListener() {
+
+                    @Override
+                    public boolean onTouch(
+                            View v,
+                            MotionEvent event
+                    ) {
+
+                        FrameLayout.LayoutParams lp =
+                                (FrameLayout.LayoutParams)
+                                        photo.getLayoutParams();
+
+                        if (event.getAction() ==
+                                MotionEvent.ACTION_DOWN) {
+
+                            downX = event.getRawX();
+                            downY = event.getRawY();
+
+                            startX = lp.leftMargin;
+                            startY = lp.topMargin;
+
+                            return true;
+                        }
+
+                        if (event.getAction() ==
+                                MotionEvent.ACTION_MOVE) {
+
+                            int newX =
+                                    (int) (
+                                            startX +
+                                            event.getRawX() -
+                                            downX
+                                    );
+
+                            int newY =
+                                    (int) (
+                                            startY +
+                                            event.getRawY() -
+                                            downY
+                                    );
+
+                            lp.leftMargin = newX;
+                            lp.topMargin = newY;
+
+                            photoX = newX;
+                            photoY = newY;
+
+                            photo.setLayoutParams(lp);
+
+                            return true;
+                        }
+
+                        return true;
+                    }
+                }
+        );
+
+        // Instruction
+        TextView instruction = new TextView(this);
+
+        instruction.setText(
+                "Fit the test photo inside the guide"
+        );
+
+        instruction.setTextSize(16);
+        instruction.setTextColor(Color.WHITE);
+        instruction.setGravity(Gravity.CENTER);
+
+        GradientDrawable blackBox =
+                new GradientDrawable();
+
+        blackBox.setColor(Color.BLACK);
+        blackBox.setCornerRadius(60);
+
+        instruction.setBackground(blackBox);
+        instruction.setPadding(35, 18, 35, 18);
+
+        FrameLayout.LayoutParams textParams =
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                );
+
+        textParams.gravity =
+                Gravity.CENTER_HORIZONTAL
+                | Gravity.BOTTOM;
+
+        textParams.bottomMargin = 150;
+
+        preview.addView(
+                instruction,
+                textParams
+        );
+
+        // Bottom controls
+        LinearLayout controls =
+                new LinearLayout(this);
+
+        controls.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+
+        controls.setGravity(
+                Gravity.CENTER
+        );
+
+        controls.setPadding(
+                10,
+                10,
+                10,
+                20
+        );
+
+        Button select = makeButton("PHOTO");
+
+        Button minus = makeButton("−");
+
+        Button plus = makeButton("+");
+
+        Button reset = makeButton("RESET");
+
+        Button capture = makeButton("TEST CAPTURE");
+
+        controls.addView(select);
+        controls.addView(minus);
+        controls.addView(plus);
+        controls.addView(reset);
+        controls.addView(capture);
+
+        root.addView(
+                controls,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+        );
+
+        setContentView(root);
+
+        // Select photo
+        select.setOnClickListener(
+                v -> openPicker()
+        );
+
+        // Resize down
+        minus.setOnClickListener(
+                v -> resizePhoto(-50)
+        );
+
+        // Resize up
+        plus.setOnClickListener(
+                v -> resizePhoto(50)
+        );
+
+        // Reset
+        reset.setOnClickListener(
+                v -> resetPhoto()
+        );
+
+        // Test capture
+        capture.setOnClickListener(
+                v -> {
+
+                    if (selectedPhoto == null) {
+
+                        Toast.makeText(
+                                this,
+                                "Select a test photo first",
+                                Toast.LENGTH_SHORT
+                        ).show();
+
+                        return;
+                    }
+
+                    Toast.makeText(
+                            this,
+                            "TEST CAPTURE OK",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                }
+        );
+
+        back.setOnClickListener(
+                v -> finish()
+        );
+    }
+
+    private Button makeButton(String text) {
+
+        Button b = new Button(this);
+
+        b.setText(text);
+        b.setTextSize(13);
+
+        return b;
     }
 
     private void openPicker() {
 
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        Intent intent =
+                new Intent(
+                        Intent.ACTION_OPEN_DOCUMENT
+                );
 
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addCategory(
+                Intent.CATEGORY_OPENABLE
+        );
+
         intent.setType("image/*");
 
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-
-        startActivityForResult(intent, PICK_IMAGE);
+        startActivityForResult(
+                intent,
+                PICK_IMAGE
+        );
     }
 
     @Override
@@ -150,449 +394,65 @@ public class MainActivity extends Activity {
                 && data != null
                 && data.getData() != null) {
 
-            selectedImageUri = data.getData();
+            selectedPhoto = data.getData();
 
-            try {
-                getContentResolver().takePersistableUriPermission(
-                        selectedImageUri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                );
-            } catch (Exception ignored) {
-            }
-
-            if (overlayImage != null) {
-                overlayImage.setImageURI(selectedImageUri);
-            }
-
-            Toast.makeText(
-                    this,
-                    "Photo selected",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
-    }
-
-    private void createOverlay() {
-
-        if (overlayImage != null) {
-            Toast.makeText(
-                    this,
-                    "Overlay already running",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        windowManager =
-                (WindowManager) getSystemService(WINDOW_SERVICE);
-
-        // =========================
-        // PHOTO
-        // =========================
-
-        overlayImage = new ImageView(this);
-
-        overlayImage.setImageURI(selectedImageUri);
-
-        overlayImage.setScaleType(
-                ImageView.ScaleType.FIT_CENTER
-        );
-
-        imageParams = new WindowManager.LayoutParams(
-                imageSize,
-                imageSize,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT
-        );
-
-        imageParams.gravity =
-                Gravity.TOP | Gravity.START;
-
-        imageParams.x = imageX;
-        imageParams.y = imageY;
-
-        // PHOTO DRAG
-        overlayImage.setOnTouchListener(
-                new View.OnTouchListener() {
-
-                    float downX;
-                    float downY;
-                    int startX;
-                    int startY;
-
-                    @Override
-                    public boolean onTouch(
-                            View v,
-                            MotionEvent event
-                    ) {
-
-                        if (event.getAction() ==
-                                MotionEvent.ACTION_DOWN) {
-
-                            downX = event.getRawX();
-                            downY = event.getRawY();
-
-                            startX = imageParams.x;
-                            startY = imageParams.y;
-
-                            return true;
-                        }
-
-                        if (event.getAction() ==
-                                MotionEvent.ACTION_MOVE) {
-
-                            imageX =
-                                    startX +
-                                    (int)(event.getRawX() - downX);
-
-                            imageY =
-                                    startY +
-                                    (int)(event.getRawY() - downY);
-
-                            imageParams.x = imageX;
-                            imageParams.y = imageY;
-
-                            updateImage();
-
-                            return true;
-                        }
-
-                        return true;
-                    }
-                }
-        );
-
-        // =========================
-        // CONTROL BOX
-        // =========================
-
-        controls = new LinearLayout(this);
-
-        controls.setOrientation(
-                LinearLayout.VERTICAL
-        );
-
-        controls.setGravity(
-                Gravity.CENTER
-        );
-
-        controls.setPadding(
-                8,
-                8,
-                8,
-                8
-        );
-
-        controls.setBackgroundColor(
-                0xDD333333
-        );
-
-        // DRAG HANDLE
-        TextView dragHandle = new TextView(this);
-
-        dragHandle.setText("☰  DRAG CONTROL BOX");
-        dragHandle.setTextColor(Color.WHITE);
-        dragHandle.setTextSize(14);
-        dragHandle.setGravity(Gravity.CENTER);
-        dragHandle.setPadding(20, 12, 20, 12);
-
-        controls.addView(dragHandle);
-
-        // BUTTON ROW
-        LinearLayout row = new LinearLayout(this);
-
-        row.setOrientation(
-                LinearLayout.HORIZONTAL
-        );
-
-        row.setGravity(
-                Gravity.CENTER
-        );
-
-        Button left = makeButton("←");
-        Button up = makeButton("↑");
-        Button minus = makeButton("−");
-        Button plus = makeButton("+");
-        Button down = makeButton("↓");
-        Button right = makeButton("→");
-        Button reset = makeButton("RESET");
-        Button close = makeButton("X");
-
-        row.addView(left);
-        row.addView(up);
-        row.addView(minus);
-        row.addView(plus);
-        row.addView(down);
-        row.addView(right);
-        row.addView(reset);
-        row.addView(close);
-
-        controls.addView(row);
-
-        // =========================
-        // BUTTON ACTIONS
-        // =========================
-
-        left.setOnClickListener(v ->
-                moveImage(-MOVE_STEP, 0)
-        );
-
-        right.setOnClickListener(v ->
-                moveImage(MOVE_STEP, 0)
-        );
-
-        up.setOnClickListener(v ->
-                moveImage(0, -MOVE_STEP)
-        );
-
-        down.setOnClickListener(v ->
-                moveImage(0, MOVE_STEP)
-        );
-
-        minus.setOnClickListener(v ->
-                resizeImage(-SIZE_STEP)
-        );
-
-        plus.setOnClickListener(v ->
-                resizeImage(SIZE_STEP)
-        );
-
-        reset.setOnClickListener(v -> {
-
-            imageSize = 500;
-            imageX = 0;
-            imageY = 150;
-
-            imageParams.width = imageSize;
-            imageParams.height = imageSize;
-            imageParams.x = imageX;
-            imageParams.y = imageY;
-
-            updateImage();
-        });
-
-        close.setOnClickListener(v ->
-                removeOverlay()
-        );
-
-        // =========================
-        // CONTROL WINDOW
-        // =========================
-
-        controlParams = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT
-        );
-
-        controlParams.gravity =
-                Gravity.TOP | Gravity.START;
-
-        controlParams.x = imageX;
-        controlParams.y = imageY + imageSize + 20;
-
-        // =========================
-        // DRAG CONTROL BOX
-        // =========================
-
-        dragHandle.setOnTouchListener(
-                new View.OnTouchListener() {
-
-                    float downX;
-                    float downY;
-                    int startX;
-                    int startY;
-
-                    @Override
-                    public boolean onTouch(
-                            View v,
-                            MotionEvent event
-                    ) {
-
-                        if (event.getAction() ==
-                                MotionEvent.ACTION_DOWN) {
-
-                            downX = event.getRawX();
-                            downY = event.getRawY();
-
-                            startX = controlParams.x;
-                            startY = controlParams.y;
-
-                            return true;
-                        }
-
-                        if (event.getAction() ==
-                                MotionEvent.ACTION_MOVE) {
-
-                            controlParams.x =
-                                    startX +
-                                    (int)(event.getRawX() - downX);
-
-                            controlParams.y =
-                                    startY +
-                                    (int)(event.getRawY() - downY);
-
-                            try {
-
-                                windowManager.updateViewLayout(
-                                        controls,
-                                        controlParams
-                                );
-
-                            } catch (Exception ignored) {
-                            }
-
-                            return true;
-                        }
-
-                        return true;
-                    }
-                }
-        );
-
-        // ADD PHOTO
-        windowManager.addView(
-                overlayImage,
-                imageParams
-        );
-
-        // ADD CONTROL BOX
-        windowManager.addView(
-                controls,
-                controlParams
-        );
-
-        Toast.makeText(
-                this,
-                "Overlay started",
-                Toast.LENGTH_SHORT
-        ).show();
-    }
-
-    private Button makeButton(String text) {
-
-        Button button = new Button(this);
-
-        button.setText(text);
-        button.setTextSize(14);
-        button.setTextColor(Color.WHITE);
-
-        button.setMinWidth(55);
-        button.setMinHeight(50);
-
-        return button;
-    }
-
-    private void moveImage(
-            int dx,
-            int dy
-    ) {
-
-        if (imageParams == null
-                || overlayImage == null) {
-            return;
-        }
-
-        imageX += dx;
-        imageY += dy;
-
-        imageParams.x = imageX;
-        imageParams.y = imageY;
-
-        updateImage();
-    }
-
-    private void resizeImage(int amount) {
-
-        if (imageParams == null
-                || overlayImage == null) {
-            return;
-        }
-
-        imageSize += amount;
-
-        if (imageSize < MIN_SIZE) {
-            imageSize = MIN_SIZE;
-        }
-
-        if (imageSize > MAX_SIZE) {
-            imageSize = MAX_SIZE;
-        }
-
-        imageParams.width = imageSize;
-        imageParams.height = imageSize;
-
-        updateImage();
-    }
-
-    private void updateImage() {
-
-        if (windowManager == null
-                || overlayImage == null
-                || imageParams == null) {
-            return;
-        }
-
-        try {
-
-            windowManager.updateViewLayout(
-                    overlayImage,
-                    imageParams
+            photo.setImageURI(
+                    selectedPhoto
             );
 
-        } catch (Exception ignored) {
+            photo.setVisibility(
+                    View.VISIBLE
+            );
+
+            resetPhoto();
+
+            Toast.makeText(
+                    this,
+                    "Test photo loaded",
+                    Toast.LENGTH_SHORT
+            ).show();
         }
     }
 
-    private void removeOverlay() {
+    private void resizePhoto(int amount) {
 
-        if (windowManager == null) {
-            return;
+        FrameLayout.LayoutParams lp =
+                (FrameLayout.LayoutParams)
+                        photo.getLayoutParams();
+
+        int newSize =
+                lp.width + amount;
+
+        if (newSize < 200) {
+            newSize = 200;
         }
 
-        try {
-
-            if (overlayImage != null) {
-                windowManager.removeView(
-                        overlayImage
-                );
-            }
-
-        } catch (Exception ignored) {
+        if (newSize > 900) {
+            newSize = 900;
         }
 
-        try {
+        lp.width = newSize;
+        lp.height = newSize;
 
-            if (controls != null) {
-                windowManager.removeView(
-                        controls
-                );
-            }
-
-        } catch (Exception ignored) {
-        }
-
-        overlayImage = null;
-        controls = null;
-        imageParams = null;
-        controlParams = null;
-
-        Toast.makeText(
-                this,
-                "Overlay stopped",
-                Toast.LENGTH_SHORT
-        ).show();
+        photo.setLayoutParams(lp);
     }
 
-    @Override
-    protected void onDestroy() {
+    private void resetPhoto() {
 
-        removeOverlay();
+        FrameLayout.LayoutParams lp =
+                (FrameLayout.LayoutParams)
+                        photo.getLayoutParams();
 
-        super.onDestroy();
+        lp.width = baseSize;
+        lp.height = baseSize;
+
+        lp.leftMargin = 0;
+        lp.topMargin = 80;
+
+        lp.gravity =
+                Gravity.TOP
+                | Gravity.CENTER_HORIZONTAL;
+
+        photo.setLayoutParams(lp);
     }
 }
