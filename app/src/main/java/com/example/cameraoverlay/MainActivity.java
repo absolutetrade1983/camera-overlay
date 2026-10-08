@@ -155,7 +155,7 @@ public class MainActivity extends Activity {
                 30,
                 0,
                 30,
-                60
+                20
         );
 
         root.addView(
